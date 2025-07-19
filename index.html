@@ -353,6 +353,11 @@
                 isFilterOpen: false, 
                 isUserPanelOpen: false, 
                 confirmDialog: { show: false, text: '', onConfirm: null },
+                isSharingLocation: false,
+                locationWatchId: null,
+                driverMarker: null,
+                driverAccuracyCircle: null,
+                driverLocationUnsubscribe: null,
             });
 
             const forms = reactive({
@@ -412,6 +417,9 @@
                     } else {
                          services.loadPassengers(state.currentUser.uid, null);
                     }
+                    if (state.currentUser.role === 'passenger') {
+                        services.listenToDriverLocation(state.currentUser.driverId);
+                    }
                 } else {
                     if (state.map) {
                         state.map.remove();
@@ -466,6 +474,65 @@
             };
 
             const handlers = {
+                toggleLocationSharing: (event) => {
+                    state.isSharingLocation = event.target.checked;
+                    if (state.isSharingLocation) {
+                        if (!state.map) return;
+                        
+                        state.map.on('locationfound', handlers.onLocationFound);
+                        state.map.on('locationerror', handlers.onLocationError);
+                        state.map.locate({ watch: true, setView: true, maxZoom: 16, enableHighAccuracy: true });
+
+                    } else {
+                        if (!state.map) return;
+                        
+                        state.map.stopLocate();
+                        state.map.off('locationfound', handlers.onLocationFound);
+                        state.map.off('locationerror', handlers.onLocationError);
+
+                        if (state.driverMarker) {
+                            state.map.removeLayer(state.driverMarker);
+                            state.driverMarker = null;
+                        }
+                        if (state.driverAccuracyCircle) {
+                            state.map.removeLayer(state.driverAccuracyCircle);
+                            state.driverAccuracyCircle = null;
+                        }
+                        services.updateDriverLocation(null);
+                    }
+                },
+                onLocationFound: async (e) => {
+                    const newLocation = { lat: e.latlng.lat, lng: e.latlng.lng };
+                    const radius = e.accuracy;
+
+                    if (state.driverMarker) {
+                        state.driverMarker.setLatLng(newLocation);
+                        state.driverAccuracyCircle.setLatLng(newLocation).setRadius(radius);
+                    } else {
+                        const driverIcon = L.divIcon({
+                            className: 'leaflet-div-icon',
+                            html: `<i class="fas fa-bus text-blue-500" style="font-size: 2rem; text-shadow: 1px 1px 3px rgba(0,0,0,0.5);"></i>`,
+                            iconSize: [32, 32],
+                            iconAnchor: [16, 16]
+                        });
+                        state.driverMarker = L.marker(newLocation, { icon: driverIcon }).addTo(state.map);
+                        state.driverAccuracyCircle = L.circle(newLocation, radius).addTo(state.map);
+                    }
+                    await services.updateDriverLocation({ ...newLocation, accuracy: radius });
+                },
+                onLocationError: (e) => {
+                    let message = 'Bilinmeyen bir konum hatası oluştu.';
+                    switch(e.code) {
+                        case 1: message = "Konum izni reddedildi. Tarayıcı ayarlarınızı kontrol edin."; break;
+                        case 2: message = "Konum bilgisi şu anda mevcut değil."; break;
+                        case 3: message = "Konum bilgisi alınamadı, zaman aşımına uğradı."; break;
+                    }
+                    ui.showToast(message, 'error');
+                    const toggle = document.getElementById('toggle');
+                    if (toggle) toggle.checked = false;
+                    state.isSharingLocation = false;
+                },
+
                 toggleDay(dayKey) {
                     const index = forms.passenger.holidayDays.indexOf(dayKey);
                     if (index > -1) {
@@ -549,6 +616,13 @@
                 },
 
                 logout: async () => {
+                    if (state.isSharingLocation) {
+                        handlers.toggleLocationSharing({ target: { checked: false } });
+                    }
+                    if (state.driverLocationUnsubscribe) {
+                        state.driverLocationUnsubscribe();
+                        state.driverLocationUnsubscribe = null;
+                    }
                     if (state.auth.currentUser) {
                         await state.auth.signOut();
                     }
@@ -754,6 +828,49 @@
             };
 
             const services = {
+                updateDriverLocation: async (location) => {
+                    if (!state.currentUser || state.currentUser.role !== 'driver') return;
+                    const driverRef = state.db.collection('drivers').doc(state.currentUser.uid);
+                    if (location) {
+                        await driverRef.update({ location });
+                    } else {
+                        await driverRef.update({ location: firebase.firestore.FieldValue.delete() });
+                    }
+                },
+                listenToDriverLocation: (driverId) => {
+                    if (state.driverLocationUnsubscribe) state.driverLocationUnsubscribe();
+
+                    state.driverLocationUnsubscribe = state.db.collection('drivers').doc(driverId)
+                        .onSnapshot(doc => {
+                            const data = doc.data();
+                            if (data && data.location) {
+                                const newLocation = [data.location.lat, data.location.lng];
+                                const radius = data.location.accuracy || 50; // default radius if not provided
+                                if (!state.driverMarker) {
+                                    const driverIcon = L.divIcon({
+                                        className: 'leaflet-div-icon',
+                                        html: `<i class="fas fa-bus text-blue-500" style="font-size: 2rem; text-shadow: 1px 1px 3px rgba(0,0,0,0.5);"></i>`,
+                                        iconSize: [32, 32],
+                                        iconAnchor: [16, 16]
+                                    });
+                                    state.driverMarker = L.marker(newLocation, { icon: driverIcon, zIndexOffset: 1000 }).addTo(state.map);
+                                    state.driverAccuracyCircle = L.circle(newLocation, radius).addTo(state.map);
+                                } else {
+                                    state.driverMarker.setLatLng(newLocation);
+                                    state.driverAccuracyCircle.setLatLng(newLocation).setRadius(radius);
+                                }
+                            } else {
+                                if (state.driverMarker) {
+                                    state.map.removeLayer(state.driverMarker);
+                                    state.driverMarker = null;
+                                }
+                                if (state.driverAccuracyCircle) {
+                                    state.map.removeLayer(state.driverAccuracyCircle);
+                                    state.driverAccuracyCircle = null;
+                                }
+                            }
+                        });
+                },
                 loadCompaniesForDriver: async (uid) => {
                     const snapshot = await state.db.collection('drivers').doc(uid).collection('companies').get();
                     state.userCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
