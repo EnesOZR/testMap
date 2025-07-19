@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaflet ile GPS Konum Haritası</title>
+
+    <!-- Leaflet CSS Kütüphanesi -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        /* Sayfanın tamamını kaplaması için temel stiller */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Sayfada kaydırma çubuğu olmasını engeller */
+        }
+        /* Haritanın gösterileceği alan */
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+        /* Bilgi paneli için stil */
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 20;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Haritanın render edileceği div -->
+    <div id="map"></div>
+
+    <!-- Durum ve bilgi mesajlarının gösterileceği panel -->
+    <div id="info-panel" class="info-panel">
+        <h2 class="text-lg font-bold text-gray-800 mb-2">GPS Durumu</h2>
+        <p id="status" class="text-sm text-gray-600">Konum bilgisi bekleniyor... Lütfen tarayıcınızın konum izni isteğini onaylayın.</p>
+        <div id="coords-info" class="mt-2 text-xs text-gray-500 hidden">
+            <p><span class="font-semibold">Enlem:</span> <span id="lat"></span></p>
+            <p><span class="font-semibold">Boylam:</span> <span id="lon"></span></p>
+            <p><span class="font-semibold">Doğruluk:</span> <span id="accuracy"></span> metre</p>
+        </div>
+    </div>
+
+    <!-- Leaflet JS Kütüphanesi -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+
+    <script>
+        // Elementleri seçme
+        const statusElement = document.getElementById('status');
+        const latElement = document.getElementById('lat');
+        const lonElement = document.getElementById('lon');
+        const accuracyElement = document.getElementById('accuracy');
+        const coordsInfo = document.getElementById('coords-info');
+
+        // Haritayı başlangıç konumu (İstanbul) ve zoom seviyesi ile başlatma
+        const map = L.map('map').setView([41.015137, 28.979530], 13);
+
+        // OpenStreetMap katmanını haritaya ekleme
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+
+        // Konum bulunduğunda haritada gösterilecek işaretçi ve daire
+        let marker, circle;
+
+        // Konum başarıyla bulunduğunda çalışacak fonksiyon
+        function onLocationFound(e) {
+            const radius = e.coords.accuracy; // Doğruluk payı (metre cinsinden)
+            const latlng = { lat: e.coords.latitude, lng: e.coords.longitude };
+
+            // Durum ve koordinat bilgilerini güncelleme
+            statusElement.textContent = 'Konum başarıyla bulundu!';
+            statusElement.classList.remove('text-red-600', 'text-gray-600');
+            statusElement.classList.add('text-green-600');
+            coordsInfo.classList.remove('hidden');
+            latElement.textContent = latlng.lat.toFixed(6);
+            lonElement.textContent = latlng.lng.toFixed(6);
+            accuracyElement.textContent = radius.toFixed(2);
+
+            // Eğer daha önce işaretçi oluşturulmadıysa, yenilerini oluştur
+            if (!marker) {
+                marker = L.marker(latlng).addTo(map);
+                circle = L.circle(latlng, radius).addTo(map);
+            } else {
+                // İşaretçi ve daireyi yeni konuma ve doğruluk payına göre güncelle
+                marker.setLatLng(latlng);
+                circle.setLatLng(latlng);
+                circle.setRadius(radius);
+            }
+
+            // Haritayı kullanıcının konumuna ve doğruluk payına göre odakla
+            map.flyTo(latlng, map.getZoom());
+
+            // İşaretçiye tıklandığında açılacak popup
+            marker.bindPopup(`<b>Konumunuz</b><br>Doğruluk: ${radius.toFixed(2)} metre`).openPopup();
+        }
+
+        // Konum bulunamadığında veya hata olduğunda çalışacak fonksiyon
+        function onLocationError(e) {
+            let errorMessage = 'Bilinmeyen bir hata oluştu.';
+            switch(e.code) {
+                case e.PERMISSION_DENIED:
+                    errorMessage = 'Konum izni reddedildi. Lütfen tarayıcı ayarlarından bu site için konuma izin verin.';
+                    break;
+                case e.POSITION_UNAVAILABLE:
+                    errorMessage = 'Konum bilgisi şu anda alınamıyor. Cihazınızın GPS sinyali zayıf olabilir.';
+                    break;
+                case e.TIMEOUT:
+                    errorMessage = 'Konum alma işlemi zaman aşımına uğradı. Sayfayı yenileyip tekrar deneyin.';
+                    break;
+            }
+            statusElement.textContent = `HATA: ${errorMessage}`;
+            statusElement.classList.remove('text-green-600', 'text-gray-600');
+            statusElement.classList.add('text-red-600');
+        }
+
+        // Tarayıcının Geolocation API'sini kullanarak konumu izleme
+        if ('geolocation' in navigator) {
+            navigator.geolocation.watchPosition(onLocationFound, onLocationError, {
+                enableHighAccuracy: true, // En yüksek doğruluğu talep et
+                timeout: 15000,           // 15 saniye içinde cevap alamazsa hata ver
+                maximumAge: 0             // Önbellekteki konumu kullanma, her zaman güncel konumu al
+            });
+        } else {
+            statusElement.textContent = 'Tarayıcınız konum servislerini desteklemiyor.';
+            statusElement.classList.add('text-red-600');
+        }
+    </script>
+
+</body>
+</html>
