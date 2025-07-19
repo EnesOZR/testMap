@@ -3,154 +3,1077 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leaflet ile GPS Konum Haritası</title>
-
-    <!-- Leaflet CSS Kütüphanesi -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-     crossorigin=""/>
-
-    <!-- Google Fonts: Inter -->
+    <title>Servis Yönetim Sistemi</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" xintegrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     <style>
-        /* Sayfanın tamamını kaplaması için temel stiller */
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
+        body {
             font-family: 'Inter', sans-serif;
-            overflow: hidden; /* Sayfada kaydırma çubuğu olmasını engeller */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
-        /* Haritanın gösterileceği alan */
-        #map {
-            width: 100%;
-            height: 100%;
-            z-index: 10;
+        body.overflow-hidden {
+            overflow: hidden;
         }
-        /* Bilgi paneli için stil */
-        .info-panel {
+        #map { height: 100%; width: 100%; z-index: 10; }
+        .passenger-marker {
+            background-color: #ffffff;
+            color: #111827;
+            border: 4px solid;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+        .marker-blink::after {
+            content: '';
             position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 20;
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            max-width: 300px;
+            top: -4px;
+            left: -4px;
+            right: -4px;
+            bottom: -4px;
+            border-radius: 50%;
+            border: 3px solid rgba(34, 197, 94, 0.7);
+            animation: pulse-border 1.5s ease-out infinite;
+            z-index: -1;
+        }
+        @keyframes pulse-border {
+            0% {
+                transform: scale(1);
+                opacity: 0.7;
+            }
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+        .leaflet-popup-content-wrapper { background-color: #1f2937; color: #f3f4f6; border-radius: 12px; }
+        .leaflet-popup-content { margin: 16px; font-size: 14px; line-height: 1.6; }
+        .leaflet-popup-tip { background-color: #1f2937; }
+        .leaflet-container a.leaflet-popup-close-button { color: #d1d5db; }
+        .filter-checkbox + label { border-color: #4b5563; color: #d1d5db; }
+        .filter-checkbox:checked + label { background-color: #4f46e5; border-color: #4f46e5; color: #ffffff; }
+        .shift-time-input { background-color: transparent; border: none; color: #9ca3af; text-align: center; width: 60px; }
+        .shift-time-input:focus { outline: none; }
+        [v-cloak] { display: none; }
+        .leaflet-div-icon {
+            background: none;
+            border: none;
+        }
+        .day-selector-btn {
+            border: 1px solid #4b5563;
+            color: #d1d5db;
+            transition: all 0.2s;
+        }
+        .day-selector-btn.selected {
+            background-color: #4f46e5;
+            border-color: #4f46e5;
+            color: #ffffff;
+        }
+        /* Toggle Switch */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #4f46e5;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4f46e5;
         }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-900 text-gray-200">
 
-    <!-- Haritanın render edileceği div -->
-    <div id="map"></div>
+    <div id="app" v-cloak>
+        <!-- Login Screen -->
+        <div v-if="!state.loggedIn" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
+            <div class="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-2xl shadow-2xl">
+                <div>
+                    <h2 class="text-center text-3xl font-extrabold text-white">Servis Sistemine Giriş</h2>
+                </div>
+                <div class="flex border-b border-gray-700">
+                    <button @click="state.loginTab = 'driver'" :class="{'border-indigo-500 text-indigo-400': state.loginTab === 'driver', 'border-transparent text-gray-400 hover:text-white': state.loginTab !== 'driver'}" class="flex-1 py-3 px-1 border-b-2 font-medium text-lg focus:outline-none transition-colors">
+                        <i class="fas fa-user-tie mr-2"></i> Şoför
+                    </button>
+                    <button @click="state.loginTab = 'passenger'" :class="{'border-indigo-500 text-indigo-400': state.loginTab === 'passenger', 'border-transparent text-gray-400 hover:text-white': state.loginTab !== 'passenger'}" class="flex-1 py-3 px-1 border-b-2 font-medium text-lg focus:outline-none transition-colors">
+                        <i class="fas fa-user mr-2"></i> Yolcu
+                    </button>
+                </div>
 
-    <!-- Durum ve bilgi mesajlarının gösterileceği panel -->
-    <div id="info-panel" class="info-panel">
-        <h2 class="text-lg font-bold text-gray-800 mb-2">GPS Durumu</h2>
-        <p id="status" class="text-sm text-gray-600">Konum bilgisi bekleniyor... Lütfen tarayıcınızın konum izni isteğini onaylayın.</p>
-        <div id="coords-info" class="mt-2 text-xs text-gray-500 hidden">
-            <p><span class="font-semibold">Enlem:</span> <span id="lat"></span></p>
-            <p><span class="font-semibold">Boylam:</span> <span id="lon"></span></p>
-            <p><span class="font-semibold">Doğruluk:</span> <span id="accuracy"></span> metre</p>
+                <form v-if="state.loginTab === 'driver'" @submit.prevent="handlers.loginDriver" class="space-y-6">
+                    <input type="text" v-model="forms.driverLogin.plate" placeholder="Plaka" required class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input type="password" v-model="forms.driverLogin.password" placeholder="Şifre" required class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button type="submit" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white font-bold text-lg transition-colors">Giriş Yap</button>
+                    <p class="text-center text-sm text-gray-400">Hesabınız yok mu? <a href="#" @click.prevent="state.showRegister = true" class="font-medium text-indigo-400 hover:text-indigo-300">Kayıt Ol</a></p>
+                </form>
+
+                <form v-if="state.loginTab === 'passenger'" @submit.prevent="handlers.loginPassenger" class="space-y-6">
+                    <input type="text" v-model="forms.passengerLogin.plate" placeholder="Servis Plakası" required class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button type="submit" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white font-bold text-lg transition-colors">Servisi Bul</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Driver Registration Modal -->
+        <div v-if="state.showRegister" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+            <div class="bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full space-y-6">
+                 <h3 class="text-2xl font-bold text-white text-center">Şoför Kayıt</h3>
+                 <form @submit.prevent="handlers.registerDriver" class="space-y-4">
+                    <input type="text" v-model="forms.driverRegister.name" placeholder="Ad Soyad" required class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input type="text" v-model="forms.driverRegister.plate" placeholder="Plaka" required class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input type="password" v-model="forms.driverRegister.password" placeholder="Şifre" required class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <div class="flex gap-4 pt-4">
+                        <button type="button" @click="state.showRegister = false" class="w-full py-3 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg text-white font-bold transition-colors">İptal</button>
+                        <button type="submit" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white font-bold transition-colors">Kayıt Ol</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Company Selection Modal -->
+        <div v-if="state.showCompanySelector" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+             <div class="bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full">
+                <h3 class="text-2xl font-bold text-white text-center mb-6">Firma Seçin</h3>
+                <div class="space-y-3 max-h-60 overflow-y-auto">
+                    <button v-for="company in state.userCompanies" :key="company.id" @click="handlers.selectCompany(company.id)" class="w-full p-4 bg-gray-700 hover:bg-indigo-600 rounded-lg text-white font-semibold text-left transition-colors">
+                        {{ company.name }}
+                    </button>
+                </div>
+             </div>
+        </div>
+
+        <!-- Main Application UI -->
+        <div v-if="state.loggedIn" class="relative h-screen w-screen">
+            <div id="map"></div>
+
+            <!-- UI Overlays -->
+            <div class="absolute top-4 left-4 right-4 sm:right-auto z-20 flex flex-col gap-4 sm:w-80">
+                <!-- User/Company Info -->
+                <div class="bg-black/70 backdrop-blur-sm rounded-lg shadow-lg overflow-hidden">
+                    <div @click="state.isUserPanelOpen = !state.isUserPanelOpen" class="flex justify-between items-center p-3 cursor-pointer">
+                        <div v-if="state.currentUser">
+                            <h3 class="font-bold text-lg text-white">{{ state.currentUser.name }}</h3>
+                            <p class="text-sm text-gray-300">{{ state.currentUser.plate }}</p>
+                        </div>
+                        <i class="fas fa-chevron-down text-white transition-transform" :class="{'rotate-180': state.isUserPanelOpen}"></i>
+                    </div>
+                    <div v-show="state.isUserPanelOpen" class="p-4 pt-0 border-t border-gray-700">
+                        <div v-if="state.currentUser.role === 'driver'" class="mt-4 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="font-semibold">Konumumu Paylaş</span>
+                                <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                    <input type="checkbox" @change="handlers.toggleLocationSharing" :checked="state.isSharingLocation" name="toggle" id="toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                    <label for="toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                                </div>
+                            </div>
+                            <select v-model="state.selectedCompanyId" @change="handlers.onCompanyChange" class="w-full bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm h-10 px-2">
+                                <option v-for="company in state.userCompanies" :value="company.id">{{ company.name }}</option>
+                            </select>
+                            <button @click="ui.openCompanyModal()" class="w-full text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-3 rounded-md transition-colors">
+                                <i class="fas fa-plus mr-1"></i> Yeni Firma Ekle
+                            </button>
+                            <button @click="handlers.confirmDeleteDriverAccount" class="w-full text-sm bg-red-800 hover:bg-red-700 text-white font-semibold py-2 px-3 rounded-md transition-colors">
+                                <i class="fas fa-trash-alt mr-1"></i> Hesabımı Sil
+                            </button>
+                        </div>
+                        <div v-if="state.currentUser.role === 'passenger'" class="mt-4">
+                            <h3 class="font-bold text-lg text-white">{{ state.selectedCompanyName }}</h3>
+                        </div>
+                        <button @click="handlers.logout" class="mt-2 w-full text-sm bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-3 rounded-md transition-colors">
+                            <i class="fas fa-sign-out-alt mr-1"></i> Çıkış Yap
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filter Container -->
+                <div class="bg-black/70 backdrop-blur-sm rounded-lg shadow-lg overflow-hidden">
+                    <div @click="ui.toggleFilterPanel" class="flex justify-between items-center p-3 cursor-pointer">
+                        <h3 class="font-bold text-md text-white">Filtrele</h3>
+                        <i class="fas fa-chevron-down text-white transition-transform" :class="{'rotate-180': state.isFilterOpen}"></i>
+                    </div>
+                    <div v-show="state.isFilterOpen" class="p-4 pt-0">
+                         <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div><input type="checkbox" id="filter-all" value="all" class="filter-checkbox hidden" v-model="filters.all" @change="handlers.onFilterChange('all')"><label for="filter-all" class="cursor-pointer p-2 rounded-md border block text-center transition-colors">Tümü</label></div>
+                            <div><input type="checkbox" id="filter-active" value="active" class="filter-checkbox hidden" v-model="filters.active" @change="handlers.onFilterChange('active')"><label for="filter-active" class="cursor-pointer p-2 rounded-md border block text-center transition-colors">Gelecekler</label></div>
+                            <div v-for="shift in shiftFilterOptions" :key="shift.key">
+                                <input type="checkbox" :id="'filter-' + shift.key" :value="shift.key" class="filter-checkbox hidden" v-model="filters.shifts[shift.key]" @change="handlers.onFilterChange(shift.key)">
+                                <label :for="'filter-' + shift.key" class="cursor-pointer p-2 rounded-md border block text-center transition-colors">{{ shift.name }}</label>
+                            </div>
+                            <div><input type="checkbox" id="filter-off-day" value="off-day" class="filter-checkbox hidden" v-model="filters.offDay" @change="handlers.onFilterChange('off-day')"><label for="filter-off-day" class="cursor-pointer p-2 rounded-md border block text-center transition-colors">İzinliler</label></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide Panel for Forms -->
+            <div @click="ui.closePanel" :class="{'hidden': !state.isPanelOpen}" class="fixed inset-0 bg-black bg-opacity-60 z-40 transition-opacity duration-300">
+                <div @click.stop :class="{'translate-x-full': !state.isPanelOpen}" class="absolute top-0 right-0 h-full w-full max-w-md bg-gray-800 text-white shadow-2xl transform transition-transform duration-300 ease-in-out">
+                    <div class="h-full flex flex-col">
+                        <div class="flex justify-between items-center p-4 border-b border-gray-700">
+                            <h2 class="text-xl font-bold">{{ state.formTitle }}</h2>
+                            <button @click="ui.closePanel" class="p-2 rounded-full hover:bg-gray-700 transition-colors">
+                                <i class="fas fa-times h-6 w-6"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 overflow-y-auto flex-grow" id="slidePanelFormContent">
+                            <!-- Passenger Form -->
+                            <form v-if="state.panelMode === 'passenger'" @submit.prevent="handlers.savePassenger" class="space-y-5">
+                                <div>
+                                    <label class="block text-sm font-medium">Ad Soyad</label>
+                                    <input type="text" v-model="forms.passenger.name" required placeholder="Örn: Ali Veli" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md h-10 px-3">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">İzin Günleri</label>
+                                    <div class="grid grid-cols-4 gap-2 text-center text-sm">
+                                        <button type="button" v-for="day in dayOptions" :key="day.key" @click="handlers.toggleDay(day.key)" :class="{'selected': forms.passenger.holidayDays.includes(day.key)}" class="day-selector-btn p-2 rounded-md">{{ day.name }}</button>
+                                    </div>
+                                </div>
+                                
+                                <fieldset class="border-t border-gray-700 pt-4">
+                                    <legend class="text-base font-semibold mb-2">Döngü Bilgileri (Otomatik)</legend>
+                                    <p class="text-xs text-gray-400 mb-3">Mevcut durumunuzu girin, sistem gerisini halleder.</p>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium">Döngü Süresi (Gün)</label>
+                                            <input type="number" v-model.number="forms.passenger.cycleLengthDays" required min="1" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md h-10 px-3">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium">Mevcut Vardiyanız</label>
+                                            <select v-model="forms.passenger.currentShiftKey" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md h-10 px-2">
+                                                <option v-for="shift in forms.passenger.shifts.filter(s => s.order)" :value="shift.key">{{ shift.name }}</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium">Bugün Döngünün Kaçıncı Günü?</label>
+                                            <input type="number" v-model.number="forms.passenger.currentDayInCycle" required min="1" :max="forms.passenger.cycleLengthDays" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md h-10 px-3">
+                                        </div>
+                                    </div>
+                                </fieldset>
+
+                                <fieldset class="border-t border-gray-700 pt-4">
+                                    <legend class="text-base font-semibold mb-2">Vardiya Rotasyonu</legend>
+                                    <p class="text-xs text-gray-400 mb-3">Vardiyaları çalışma sırasına göre numaralandırın (Örn: Gece: 1, Orta: 2, Sabah: 3).</p>
+                                    <div class="space-y-3">
+                                        <div v-for="shift in forms.passenger.shifts" :key="shift.key" class="flex items-center justify-between p-3 rounded-md bg-gray-700">
+                                            <span class="font-bold text-lg w-16">{{ shift.name }}</span>
+                                            <div class="flex items-center gap-1">
+                                                <input type="time" v-model="shift.start" class="shift-time-input">
+                                                <span>-</span>
+                                                <input type="time" v-model="shift.end" class="shift-time-input">
+                                            </div>
+                                            <input type="number" min="1" v-model.number="shift.order" class="w-16 text-center bg-gray-600 border border-gray-500 rounded-md text-white p-1" placeholder="Sıra">
+                                        </div>
+                                    </div>
+                                </fieldset>
+                                <div class="pt-4">
+                                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg">Kaydet</button>
+                                </div>
+                            </form>
+                            <!-- Company Form -->
+                            <form v-if="state.panelMode === 'company'" @submit.prevent="handlers.saveCompany" class="space-y-5">
+                                <div>
+                                    <label class="block text-sm font-medium">Firma Adı</label>
+                                    <input type="text" v-model="forms.company.name" required placeholder="Örn: Amazon, Ford" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md h-10 px-3">
+                                </div>
+                                <div class="pt-4">
+                                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg">Kaydet</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Confirm Dialog -->
+            <div v-if="state.confirmDialog.show" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+                <div class="bg-gray-800 rounded-2xl shadow-xl p-8 max-w-sm w-full text-center">
+                    <h3 class="text-lg font-semibold text-white mb-4">Emin misiniz?</h3>
+                    <p class="text-gray-300 mb-6">{{ state.confirmDialog.text }}</p>
+                    <div class="flex justify-center gap-4">
+                        <button @click="state.confirmDialog.show = false" class="px-6 py-2 rounded-lg bg-gray-600 hover:bg-gray-500 font-semibold transition-colors">İptal</button>
+                        <button @click="handlers.onConfirm" class="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors">Onayla</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Toast Notification -->
+            <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg opacity-0 translate-y-10 transition-all duration-300 z-50"></div>
+        </div>
+        
+        <!-- Footer -->
+        <div id="branding-banner" class="absolute bottom-0 left-0 w-full bg-black/100 py-0.5 text-center z-20">
+            <p class="text-white font-semibold text-sm">oz3R Inc</p>
         </div>
     </div>
 
-    <!-- Leaflet JS Kütüphanesi -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-     crossorigin=""></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
     <script>
-        // Elementleri seçme
-        const statusElement = document.getElementById('status');
-        const latElement = document.getElementById('lat');
-        const lonElement = document.getElementById('lon');
-        const accuracyElement = document.getElementById('accuracy');
-        const coordsInfo = document.getElementById('coords-info');
+    const { createApp, ref, reactive, onMounted, watch, computed, nextTick } = Vue;
 
-        // Haritayı başlangıç konumu (İstanbul) ve zoom seviyesi ile başlatma
-        const map = L.map('map').setView([41.015137, 28.979530], 13);
-
-        // OpenStreetMap katmanını haritaya ekleme
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        }).addTo(map);
-
-        // Konum bulunduğunda haritada gösterilecek işaretçi ve daire
-        let marker, circle;
-
-        // Konum başarıyla bulunduğunda çalışacak fonksiyon
-        function onLocationFound(e) {
-            const radius = e.coords.accuracy; // Doğruluk payı (metre cinsinden)
-            const latlng = { lat: e.coords.latitude, lng: e.coords.longitude };
-
-            // Durum ve koordinat bilgilerini güncelleme
-            statusElement.textContent = 'Konum başarıyla bulundu!';
-            statusElement.classList.remove('text-red-600', 'text-gray-600');
-            statusElement.classList.add('text-green-600');
-            coordsInfo.classList.remove('hidden');
-            latElement.textContent = latlng.lat.toFixed(6);
-            lonElement.textContent = latlng.lng.toFixed(6);
-            accuracyElement.textContent = radius.toFixed(2);
-
-            // Eğer daha önce işaretçi oluşturulmadıysa, yenilerini oluştur
-            if (!marker) {
-                marker = L.marker(latlng).addTo(map);
-                circle = L.circle(latlng, radius).addTo(map);
-            } else {
-                // İşaretçi ve daireyi yeni konuma ve doğruluk payına göre güncelle
-                marker.setLatLng(latlng);
-                circle.setLatLng(latlng);
-                circle.setRadius(radius);
-            }
-
-            // Haritayı kullanıcının konumuna ve doğruluk payına göre odakla
-            map.flyTo(latlng, map.getZoom());
-
-            // İşaretçiye tıklandığında açılacak popup
-            marker.bindPopup(`<b>Konumunuz</b><br>Doğruluk: ${radius.toFixed(2)} metre`).openPopup();
-        }
-
-        // Konum bulunamadığında veya hata olduğunda çalışacak fonksiyon
-        function onLocationError(e) {
-            let errorMessage = 'Bilinmeyen bir hata oluştu.';
-            switch(e.code) {
-                case e.PERMISSION_DENIED:
-                    errorMessage = 'Konum izni reddedildi. Lütfen tarayıcı ayarlarından bu site için konuma izin verin.';
-                    break;
-                case e.POSITION_UNAVAILABLE:
-                    errorMessage = 'Konum bilgisi şu anda alınamıyor. Cihazınızın GPS sinyali zayıf olabilir.';
-                    break;
-                case e.TIMEOUT:
-                    errorMessage = 'Konum alma işlemi zaman aşımına uğradı. Sayfayı yenileyip tekrar deneyin.';
-                    break;
-            }
-            statusElement.textContent = `HATA: ${errorMessage}`;
-            statusElement.classList.remove('text-green-600', 'text-gray-600');
-            statusElement.classList.add('text-red-600');
-        }
-
-        // Tarayıcının Geolocation API'sini kullanarak konumu izleme
-        if ('geolocation' in navigator) {
-            navigator.geolocation.watchPosition(onLocationFound, onLocationError, {
-                enableHighAccuracy: true, // En yüksek doğruluğu talep et
-                timeout: 15000,           // 15 saniye içinde cevap alamazsa hata ver
-                maximumAge: 0             // Önbellekteki konumu kullanma, her zaman güncel konumu al
+    const App = {
+        setup() {
+            const state = reactive({
+                db: null,
+                auth: null,
+                map: null,
+                loginTab: 'driver',
+                loggedIn: false,
+                currentUser: null,
+                showRegister: false,
+                showCompanySelector: false,
+                userCompanies: [],
+                selectedCompanyId: null,
+                selectedCompanyName: '',
+                allPassengers: [],
+                visibleMarkers: [],
+                tempMarker: null,
+                lastClickedLatLng: null,
+                isPanelOpen: false,
+                panelMode: '', 
+                formTitle: '',
+                editingId: null,
+                isFilterOpen: false, 
+                isUserPanelOpen: false, 
+                confirmDialog: { show: false, text: '', onConfirm: null },
             });
-        } else {
-            statusElement.textContent = 'Tarayıcınız konum servislerini desteklemiyor.';
-            statusElement.classList.add('text-red-600');
-        }
-    </script>
 
+            const forms = reactive({
+                driverLogin: { plate: '', password: '' },
+                driverRegister: { name: '', plate: '', password: '' },
+                passengerLogin: { plate: '' },
+                passenger: {},
+                company: {},
+            });
+
+            const filters = reactive({
+                all: true,
+                active: false,
+                offDay: false,
+                shifts: { morning: false, middle: false, night: false },
+            });
+
+            const shiftFilterOptions = ref([
+                { key: 'morning', name: 'Sabah' },
+                { key: 'middle', name: 'Orta' },
+                { key: 'night', name: 'Gece' },
+            ]);
+
+            const dayOptions = ref([
+                { key: 'monday', name: 'Pzt' },
+                { key: 'tuesday', name: 'Sal' },
+                { key: 'wednesday', name: 'Çar' },
+                { key: 'thursday', name: 'Per' },
+                { key: 'friday', name: 'Cum' },
+                { key: 'saturday', name: 'Cmt' },
+                { key: 'sunday', name: 'Paz' },
+            ]);
+
+            onMounted(() => {
+                initFirebase();
+            });
+            
+            watch(() => state.selectedCompanyId, (newId) => {
+                if (newId && state.currentUser) {
+                    const company = state.userCompanies.find(c => c.id === newId);
+                    if(company) {
+                        state.selectedCompanyName = company.name;
+                    }
+                    services.loadPassengers(state.currentUser.uid, newId);
+                }
+            });
+
+            watch(() => state.loggedIn, async (isLoggedIn) => {
+                if (isLoggedIn) {
+                    await nextTick();
+                    initMap();
+                    await services.loadCompaniesForDriver(state.currentUser.uid);
+                    if (state.userCompanies.length > 0) {
+                        if (!state.selectedCompanyId) {
+                           state.selectedCompanyId = state.userCompanies[0].id;
+                        }
+                    } else {
+                         services.loadPassengers(state.currentUser.uid, null);
+                    }
+                } else {
+                    if (state.map) {
+                        state.map.remove();
+                        state.map = null;
+                    }
+                }
+            });
+
+            watch(() => forms.passenger.shifts, (newShifts) => {
+                if (!state.isPanelOpen || state.panelMode !== 'passenger' || !newShifts) {
+                    return;
+                }
+                const orderedShifts = newShifts.filter(s => s.order).sort((a, b) => a.order - b.order);
+                if (orderedShifts.length === 0) {
+                    forms.passenger.currentShiftKey = null;
+                    return;
+                }
+                const currentSelectionIsValid = orderedShifts.some(s => s.key === forms.passenger.currentShiftKey);
+                if (!currentSelectionIsValid) {
+                    const shiftWithOrder1 = orderedShifts.find(s => s.order === 1);
+                    if (shiftWithOrder1) {
+                        forms.passenger.currentShiftKey = shiftWithOrder1.key;
+                    } else {
+                        forms.passenger.currentShiftKey = orderedShifts[0].key;
+                    }
+                }
+            }, { deep: true });
+
+            const initFirebase = () => {
+                const firebaseConfig = {
+                    apiKey: "AIzaSyBgcQQexhreb-k68wpHZMi_mjLk36x-NR0",
+                    authDomain: "enes-ozer.firebaseapp.com",
+                    projectId: "enes-ozer",
+                    storageBucket: "enes-ozer.appspot.com",
+                };
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                state.db = firebase.firestore();
+                state.auth = firebase.auth();
+            };
+
+            const initMap = () => {
+                if(state.map) return;
+                state.map = L.map('map', { zoomControl: false }).setView([41.0082, 28.9784], 11);
+                L.control.zoom({ position: 'bottomright' }).addTo(state.map);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(state.map);
+                
+                if (state.currentUser.role === 'driver') {
+                    state.map.on('click', handlers.onMapClick);
+                }
+            };
+
+            const handlers = {
+                toggleDay(dayKey) {
+                    const index = forms.passenger.holidayDays.indexOf(dayKey);
+                    if (index > -1) {
+                        forms.passenger.holidayDays.splice(index, 1);
+                    } else {
+                        forms.passenger.holidayDays.push(dayKey);
+                    }
+                },
+                registerDriver: async () => {
+                    const { name, plate, password } = forms.driverRegister;
+                    if (!name || !plate || !password) return ui.showToast('Tüm alanlar zorunludur.', 'error');
+                    if (password.length < 6) return ui.showToast('Şifre en az 6 karakter olmalıdır.', 'error');
+
+                    try {
+                        const userCredential = await state.auth.createUserWithEmailAndPassword(`${plate.toLowerCase().replace(/\s/g, '')}@servis.app`, password);
+                        await state.db.collection('drivers').doc(userCredential.user.uid).set({
+                            name: name,
+                            plate: plate.toUpperCase()
+                        });
+                        ui.showToast('Kayıt başarılı! Giriş yapabilirsiniz.', 'success');
+                        state.showRegister = false;
+                        forms.driverRegister = {};
+                    } catch (error) {
+                        console.error("Registration Error:", error);
+                        if (error.code === 'auth/email-already-in-use') {
+                             ui.showToast('Bu plaka zaten kayıtlı.', 'error');
+                        } else {
+                             ui.showToast('Kayıt sırasında bir hata oluştu.', 'error');
+                        }
+                    }
+                },
+
+                loginDriver: async () => {
+                    const { plate, password } = forms.driverLogin;
+                    if (!plate || !password) return ui.showToast('Plaka ve şifre zorunludur.', 'error');
+                    try {
+                        const userCredential = await state.auth.signInWithEmailAndPassword(`${plate.toLowerCase().replace(/\s/g, '')}@servis.app`, password);
+                        const driverDoc = await state.db.collection('drivers').doc(userCredential.user.uid).get();
+                        if (!driverDoc.exists) throw new Error("Driver data not found");
+                        
+                        state.currentUser = { ...driverDoc.data(), uid: userCredential.user.uid, role: 'driver' };
+                        state.loggedIn = true; 
+                        
+                    } catch (error) {
+                        console.error("Driver Login Error:", error);
+                        ui.showToast('Plaka veya şifre hatalı.', 'error');
+                    }
+                },
+
+                loginPassenger: async () => {
+                    const { plate } = forms.passengerLogin;
+                    if (!plate) return ui.showToast('Plaka zorunludur.', 'error');
+                    try {
+                        const driverQuery = await state.db.collection('drivers').where('plate', '==', plate.toUpperCase()).limit(1).get();
+                        if (driverQuery.empty) return ui.showToast('Bu plakaya sahip bir servis bulunamadı.', 'error');
+                        
+                        const driverDoc = driverQuery.docs[0];
+                        const driver = { ...driverDoc.data(), uid: driverDoc.id };
+                        state.currentUser = { ...driver, role: 'passenger' };
+                        
+                        await services.loadCompaniesForDriver(driver.uid);
+
+                        if (state.userCompanies.length === 0) {
+                             ui.showToast('Bu servise ait firma bulunamadı.', 'info');
+                             state.loggedIn = true;
+                        } else if (state.userCompanies.length === 1) {
+                            handlers.selectCompany(state.userCompanies[0].id);
+                        } else {
+                            state.showCompanySelector = true;
+                        }
+                    } catch (error) {
+                        console.error("Passenger Login Error:", error);
+                        ui.showToast('Servis aranırken bir hata oluştu.', 'error');
+                    }
+                },
+                
+                selectCompany: (companyId) => {
+                    state.selectedCompanyId = companyId;
+                    state.loggedIn = true; 
+                    state.showCompanySelector = false;
+                },
+
+                logout: async () => {
+                    if (state.auth.currentUser) {
+                        await state.auth.signOut();
+                    }
+                    Object.assign(state, {
+                        loggedIn: false,
+                        currentUser: null,
+                        userCompanies: [],
+                        selectedCompanyId: null,
+                        selectedCompanyName: '',
+                        allPassengers: [],
+                        visibleMarkers: [],
+                        isPanelOpen: false,
+                    });
+                },
+                
+                onCompanyChange: () => {
+                    if (state.selectedCompanyId) {
+                       services.loadPassengers(state.currentUser.uid, state.selectedCompanyId);
+                    }
+                },
+                
+                saveCompany: async () => {
+                    if (!forms.company.name) return ui.showToast('Firma adı zorunludur.', 'error');
+                    
+                    const companyData = { name: forms.company.name };
+                    const driverId = state.currentUser.uid;
+
+                    try {
+                        if (state.editingId) {
+                            await state.db.collection('drivers').doc(driverId).collection('companies').doc(state.editingId).update(companyData);
+                            ui.showToast('Firma güncellendi.', 'success');
+                        } else {
+                            const docRef = await state.db.collection('drivers').doc(driverId).collection('companies').add(companyData);
+                            state.selectedCompanyId = docRef.id;
+                            ui.showToast('Firma eklendi.', 'success');
+                        }
+                        await services.loadCompaniesForDriver(driverId);
+                        ui.closePanel();
+                    } catch (error) {
+                        console.error("Error saving company:", error);
+                        ui.showToast('Firma kaydedilirken hata oluştu.', 'error');
+                    }
+                },
+
+                savePassenger: async () => {
+                    const formState = forms.passenger;
+                    const driverId = state.currentUser.uid;
+                    if (!formState.name) return ui.showToast('Yolcu adı zorunludur.', 'error');
+                    if (!state.selectedCompanyId) return ui.showToast('Lütfen önce bir firma seçin.', 'error');
+                    
+                    const orderedShifts = formState.shifts.filter(s => s.order).sort((a,b) => a.order - b.order);
+                    if (orderedShifts.length === 0) return ui.showToast('En az bir vardiya için sıra numarası girilmelidir.', 'error');
+                    if (!formState.currentShiftKey) return ui.showToast('Lütfen mevcut vardiyanızı seçin.', 'error');
+
+                    const { cycleReferenceDate, cycleStartDay } = utils.calculateCycleFromUserInput(formState, orderedShifts);
+                    
+                    let passengerLocation;
+                    if (state.lastClickedLatLng) {
+                        passengerLocation = { lat: state.lastClickedLatLng.lat, lng: state.lastClickedLatLng.lng };
+                    } else if (state.editingId) {
+                        const p = state.allPassengers.find(p => p.id === state.editingId);
+                        passengerLocation = p.location;
+                    } else {
+                        return ui.showToast('Haritadan bir konum seçin.', 'error');
+                    }
+                    
+                    const passengerData = {
+                        name: formState.name,
+                        holidayDays: formState.holidayDays,
+                        shifts: formState.shifts,
+                        cycleLengthDays: formState.cycleLengthDays,
+                        cycleReferenceDate: cycleReferenceDate,
+                        cycleStartDay: cycleStartDay,
+                        location: passengerLocation,
+                        companyId: state.selectedCompanyId
+                    };
+
+                    try {
+                        if (state.editingId) {
+                            await state.db.collection('drivers').doc(driverId).collection('passengers').doc(state.editingId).update(passengerData);
+                            ui.showToast('Yolcu güncellendi.', 'success');
+                        } else {
+                            await state.db.collection('drivers').doc(driverId).collection('passengers').add(passengerData);
+                            ui.showToast('Yolcu eklendi.', 'success');
+                        }
+                        ui.closePanel();
+                    } catch (error) {
+                        console.error("Error saving passenger:", error);
+                        ui.showToast('Yolcu kaydedilirken hata oluştu.', 'error');
+                    }
+                },
+
+                onMapClick: (e) => {
+                    if (e.originalEvent.target.closest('.leaflet-marker-icon')) return;
+                    if (state.isPanelOpen || (state.map._popup && state.map._popup.isOpen())) return;
+                    if (!state.selectedCompanyId) return ui.showToast('Lütfen önce yolcu ekleyeceğiniz firmayı seçin.', 'info');
+                    
+                    if (state.tempMarker) state.map.removeLayer(state.tempMarker);
+
+                    state.lastClickedLatLng = e.latlng;
+                    const tempIcon = L.divIcon({
+                        className: 'leaflet-div-icon',
+                        html: `
+                            <div class="relative">
+                                <i class="fas fa-map-pin text-blue-500" style="font-size: 3rem; text-shadow: 1px 1px 3px rgba(0,0,0,0.4);"></i>
+                                <button id="confirm-location-btn" class="absolute top-0 right-0 bg-green-500 text-white w-7 h-7 rounded-full flex items-center justify-center shadow-lg hover:bg-green-600 transform -translate-y-1/2 translate-x-1/2">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </div>`,
+                        iconSize: [48, 48],
+                        iconAnchor: [12, 42]
+                    });
+                    
+                    state.tempMarker = L.marker(e.latlng, { 
+                        icon: tempIcon,
+                        draggable: true 
+                    }).addTo(state.map);
+
+                    state.tempMarker.on('dragend', (event) => {
+                        state.lastClickedLatLng = event.target.getLatLng();
+                    });
+                    
+                    setTimeout(() => {
+                        document.getElementById('confirm-location-btn')?.addEventListener('click', () => {
+                             ui.openPassengerModal();
+                        });
+                    }, 0);
+                },
+
+                onFilterChange: (filter) => {
+                    if (filter === 'all') {
+                        if (filters.all) {
+                            filters.active = false;
+                            filters.offDay = false;
+                            for (const key in filters.shifts) filters.shifts[key] = false;
+                        }
+                    } else {
+                        if (filters.active || filters.offDay || Object.values(filters.shifts).some(v => v)) {
+                            filters.all = false;
+                        }
+                    }
+                    if (!filters.active && !filters.offDay && !Object.values(filters.shifts).some(v => v)) {
+                        filters.all = true;
+                    }
+                    ui.renderMarkers();
+                },
+                
+                deletePassenger: (id) => {
+                    const passenger = state.allPassengers.find(p => p.id === id);
+                    state.confirmDialog = {
+                        show: true,
+                        text: `'${passenger.name}' adlı yolcuyu silmek istediğinizden emin misiniz?`,
+                        onConfirm: async () => {
+                            await state.db.collection('drivers').doc(state.currentUser.uid).collection('passengers').doc(id).delete();
+                            ui.showToast('Yolcu silindi.', 'success');
+                            state.confirmDialog.show = false;
+                        }
+                    };
+                },
+                
+                confirmDeleteDriverAccount: () => {
+                     state.confirmDialog = {
+                        show: true,
+                        text: `Hesabınızı silmek tüm firma ve yolcu verilerinizi kalıcı olarak yok edecektir. Bu işlem geri alınamaz. Emin misiniz?`,
+                        onConfirm: handlers.deleteDriverAccount
+                    };
+                },
+
+                deleteDriverAccount: async () => {
+                    const driverId = state.currentUser.uid;
+                    const user = state.auth.currentUser;
+                    if (!driverId || !user) return ui.showToast('Kullanıcı bulunamadı.', 'error');
+                    
+                    try {
+                        const passengersSnapshot = await state.db.collection('drivers').doc(driverId).collection('passengers').get();
+                        const passengerDeletions = passengersSnapshot.docs.map(doc => doc.ref.delete());
+                        await Promise.all(passengerDeletions);
+
+                        const companiesSnapshot = await state.db.collection('drivers').doc(driverId).collection('companies').get();
+                        const companyDeletions = companiesSnapshot.docs.map(doc => doc.ref.delete());
+                        await Promise.all(companyDeletions);
+
+                        await state.db.collection('drivers').doc(driverId).delete();
+
+                        await user.delete();
+
+                        ui.showToast('Hesabınız başarıyla silindi.', 'success');
+                        handlers.logout();
+
+                    } catch (error) {
+                        console.error("Error deleting account:", error);
+                        ui.showToast('Hesap silinirken bir hata oluştu. Lütfen tekrar giriş yapıp deneyin.', 'error');
+                    } finally {
+                         state.confirmDialog.show = false;
+                    }
+                },
+
+                onConfirm: () => {
+                    if (typeof state.confirmDialog.onConfirm === 'function') {
+                        state.confirmDialog.onConfirm();
+                    }
+                },
+            };
+
+            const services = {
+                loadCompaniesForDriver: async (uid) => {
+                    const snapshot = await state.db.collection('drivers').doc(uid).collection('companies').get();
+                    state.userCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                },
+
+                loadPassengers: (driverId, companyId) => {
+                    if (!driverId) return;
+                    let query = state.db.collection('drivers').doc(driverId).collection('passengers');
+                    if (companyId) {
+                        query = query.where('companyId', '==', companyId);
+                    }
+                    query.onSnapshot(snapshot => {
+                            state.allPassengers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            ui.renderMarkers();
+                        }, error => {
+                            console.error("Error fetching passengers:", error);
+                            ui.showToast("Yolcu verileri alınamadı.", "error");
+                        });
+                },
+            };
+
+            const ui = {
+                openCompanyModal: (company = null) => {
+                    state.isPanelOpen = true;
+                    document.body.classList.add('overflow-hidden');
+                    state.panelMode = 'company';
+                    state.editingId = company ? company.id : null;
+                    state.formTitle = company ? 'Firmayı Düzenle' : 'Yeni Firma Ekle';
+                    forms.company = {
+                        name: company ? company.name : '',
+                    };
+                },
+
+                openPassengerModal: (passenger = null) => {
+                    state.isPanelOpen = true;
+                    document.body.classList.add('overflow-hidden');
+                    state.panelMode = 'passenger';
+                    state.editingId = passenger ? passenger.id : null;
+                    state.formTitle = passenger ? 'Yolcu Bilgilerini Düzenle' : 'Yeni Yolcu Ekle';
+
+                    const defaultShifts = [
+                        { key: 'morning', name: "Sabah", start: '08:00', end: '16:00', order: null },
+                        { key: 'middle', name: "Orta", start: '16:00', end: '00:00', order: null },
+                        { key: 'night', name: "Gece", start: '00:00', end: '08:00', order: null }
+                    ];
+
+                    if (passenger) {
+                        const passengerShifts = defaultShifts.map(defaultShift => {
+                            const savedShift = passenger.shifts?.find(ps => ps.key === defaultShift.key);
+                            return savedShift ? { ...defaultShift, ...savedShift } : defaultShift;
+                        });
+                        const currentShift = utils.calculateCurrentShift(passenger, new Date());
+                        const cycleDayInfo = utils.getCycleDayInfo(passenger, new Date());
+                        
+                        forms.passenger = {
+                            name: passenger.name,
+                            holidayDays: passenger.holidayDays || [],
+                            cycleLengthDays: passenger.cycleLengthDays,
+                            shifts: passengerShifts,
+                            currentShiftKey: currentShift ? currentShift.key : null,
+                            currentDayInCycle: cycleDayInfo.currentDayInCycle,
+                        };
+                    } else {
+                        forms.passenger = {
+                            name: '',
+                            holidayDays: [],
+                            cycleLengthDays: 14,
+                            shifts: defaultShifts,
+                            currentShiftKey: null,
+                            currentDayInCycle: 1,
+                        };
+                    }
+
+                    if(state.map && state.map.closePopup) state.map.closePopup();
+                },
+
+                closePanel: () => {
+                    state.isPanelOpen = false;
+                    document.body.classList.remove('overflow-hidden');
+                    state.editingId = null;
+                    if (state.tempMarker) {
+                        state.map.removeLayer(state.tempMarker);
+                        state.tempMarker = null;
+                    }
+                    state.lastClickedLatLng = null;
+                },
+
+                renderMarkers: () => {
+                    if(!state.map) return;
+                    state.visibleMarkers.forEach(m => state.map.removeLayer(m));
+                    state.visibleMarkers = [];
+                    const now = new Date();
+
+                    state.allPassengers.forEach(pData => {
+                        const { status, shift } = utils.getMarkerStatus(pData, now);
+                        
+                        const showAll = filters.all;
+                        const showActive = filters.active && status === 'active';
+                        const showOffDay = filters.offDay && status === 'off-day';
+                        const showShiftKey = shift && filters.shifts[shift.key];
+
+                        if (showAll || showActive || showOffDay || showShiftKey) {
+                            const marker = utils.createPassengerMarker(pData, now);
+                            marker.addTo(state.map);
+                            state.visibleMarkers.push(marker);
+                        }
+                    });
+                },
+
+                toggleFilterPanel: () => state.isFilterOpen = !state.isFilterOpen,
+                
+                showToast: (message, type = 'info') => {
+                    const toast = document.getElementById('toast');
+                    if(!toast) return;
+                    toast.textContent = message;
+                    toast.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg opacity-0 translate-y-10 transition-all duration-300 z-50';
+                    const colors = { success: 'bg-green-600 text-white', error: 'bg-red-600 text-white', info: 'bg-blue-600 text-white' };
+                    toast.classList.add(...colors[type].split(' '));
+                    toast.classList.remove('opacity-0', 'translate-y-10');
+                    setTimeout(() => toast.classList.add('opacity-0', 'translate-y-10'), 3000);
+                }
+            };
+
+            const utils = {
+                getInitials: (name) => (name || '').split(' ').map(part => part[0]).join('').toUpperCase(),
+                getShiftColor: (shiftKey) => ({ morning: "#f59e0b", middle: "#3b82f6", night: "#8b5cf6" }[shiftKey] || "#6b7280"),
+                
+                calculateCycleFromUserInput: (formState, orderedShifts) => {
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+
+                    const currentShiftIndex = orderedShifts.findIndex(s => s.key === formState.currentShiftKey);
+                    const daysIntoCurrentBlock = formState.currentDayInCycle - 1;
+                    
+                    const blockStartDate = new Date(today.getTime());
+                    blockStartDate.setDate(today.getDate() - daysIntoCurrentBlock);
+                    
+                    const totalDaysForPriorBlocks = currentShiftIndex * formState.cycleLengthDays;
+                    
+                    const cycleStartDay = totalDaysForPriorBlocks + 1;
+
+                    return {
+                        cycleReferenceDate: blockStartDate.toISOString().split('T')[0],
+                        cycleStartDay: cycleStartDay
+                    }
+                },
+
+                calculateCurrentShift: (passengerInfo, dateObject) => {
+                    const { cycleReferenceDate, cycleLengthDays, cycleStartDay, shifts } = passengerInfo;
+                    if (!cycleReferenceDate || !cycleLengthDays || !cycleStartDay || !shifts) return null;
+
+                    const sortedShifts = [...shifts]
+                        .filter(s => s.order)
+                        .sort((a, b) => a.order - b.order);
+
+                    if (sortedShifts.length === 0) return null;
+
+                    const refDate = new Date(cycleReferenceDate);
+                    const today = new Date(dateObject);
+                    refDate.setHours(0, 0, 0, 0);
+                    today.setHours(0, 0, 0, 0);
+                    
+                    const diffDays = Math.floor((today - refDate) / (1000 * 60 * 60 * 24));
+                    const totalDaysIntoPattern = (cycleStartDay - 1) + diffDays;
+                    
+                    if (totalDaysIntoPattern < 0) return sortedShifts[0];
+
+                    const shiftChanges = Math.floor(totalDaysIntoPattern / cycleLengthDays);
+                    
+                    const newIndex = shiftChanges % sortedShifts.length;
+                    return sortedShifts[newIndex];
+                },
+
+                getCycleDayInfo: (passengerInfo, dateObject) => {
+                    const { cycleReferenceDate, cycleLengthDays, cycleStartDay } = passengerInfo;
+                    if (!cycleReferenceDate || !cycleLengthDays || !cycleStartDay) {
+                        return { currentDayInCycle: 1, totalCycleDays: cycleLengthDays || 1 };
+                    }
+                    const refDate = new Date(cycleReferenceDate);
+                    const today = new Date(dateObject);
+                    refDate.setHours(0, 0, 0, 0);
+                    today.setHours(0, 0, 0, 0);
+
+                    const diffDays = Math.floor((today - refDate) / (1000 * 60 * 60 * 24));
+                    const totalDaysIntoPattern = (cycleStartDay - 1) + diffDays;
+
+                    if (totalDaysIntoPattern < 0) {
+                        return { currentDayInCycle: '?', totalCycleDays: cycleLengthDays };
+                    }
+
+                    const currentDayInCycle = (totalDaysIntoPattern % (cycleLengthDays || 1)) + 1;
+                    return { currentDayInCycle, totalCycleDays: cycleLengthDays };
+                },
+                
+                getMarkerStatus: (passengerInfo, dateObject) => {
+                    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                    const today = dayNames[dateObject.getDay()];
+                    const currentShiftForDisplay = utils.calculateCurrentShift(passengerInfo, dateObject);
+
+                    if ((passengerInfo.holidayDays || []).includes(today) || !currentShiftForDisplay) {
+                        return { status: 'off-day', shift: currentShiftForDisplay };
+                    }
+                    
+                    const nowHours = dateObject.getHours();
+                    let activeShiftKey = null;
+
+                    if (nowHours >= 0 && nowHours < 8) {
+                        activeShiftKey = 'morning';
+                    } else if (nowHours >= 8 && nowHours < 16) {
+                        activeShiftKey = 'middle';
+                    } else { 
+                        activeShiftKey = 'night';
+                    }
+                    
+                    const isActive = currentShiftForDisplay.key === activeShiftKey;
+
+                    return {
+                        status: isActive ? 'active' : 'normal',
+                        shift: currentShiftForDisplay
+                    };
+                },
+
+                createPassengerMarker: (passengerInfo, dateObject) => {
+                    const { status, shift: currentShift } = utils.getMarkerStatus(passengerInfo, dateObject);
+                    const initials = utils.getInitials(passengerInfo.name);
+                    const borderColor = status === 'active' ? '#22c55e' : (status === 'off-day' ? '#6b7280' : utils.getShiftColor(currentShift?.key));
+                    
+                    const customIcon = L.divIcon({
+                        className: status === 'active' ? 'marker-blink' : '',
+                        html: `<div class="passenger-marker" style="border-color: ${borderColor};">${initials}</div>`,
+                        iconSize: [44, 44], iconAnchor: [22, 22]
+                    });
+                    const marker = L.marker(passengerInfo.location, { 
+                        icon: customIcon,
+                        draggable: state.currentUser.role === 'driver'
+                    });
+
+                    if (state.currentUser.role === 'driver') {
+                        marker.on('dragstart', () => {
+                            if (state.map) {
+                                state.map.dragging.disable();
+                                state.map.scrollWheelZoom.disable();
+                            }
+                        });
+                        marker.on('dragend', async (event) => {
+                            if (state.map) {
+                                state.map.dragging.enable();
+                                state.map.scrollWheelZoom.enable();
+                            }
+                            const newLatLng = event.target.getLatLng();
+                            try {
+                                await state.db.collection('drivers').doc(state.currentUser.uid).collection('passengers').doc(passengerInfo.id).update({
+                                    location: {
+                                        lat: newLatLng.lat,
+                                        lng: newLatLng.lng
+                                    }
+                                });
+                                ui.showToast(`${passengerInfo.name} konumu güncellendi.`, 'success');
+                            } catch (error) {
+                                console.error("Error updating location:", error);
+                                ui.showToast('Konum güncellenirken bir hata oluştu.', 'error');
+                                marker.setLatLng(passengerInfo.location);
+                            }
+                        });
+                    }
+
+                    const dayNames = { monday: "Pzt", tuesday: "Sal", wednesday: "Çar", thursday: "Per", friday: "Cum", saturday: "Cmt", sunday: "Paz" };
+                    const shiftTimeInfo = currentShift ? `${currentShift.start} - ${currentShift.end}` : 'Vardiyasız';
+                    
+                    const { currentDayInCycle, totalCycleDays } = utils.getCycleDayInfo(passengerInfo, dateObject);
+                    const remainingDays = totalCycleDays - currentDayInCycle;
+                    const cycleText = currentShift ? `(${currentDayInCycle}/${totalCycleDays})` : '';
+
+                    let nextShiftText = 'Bilinmiyor';
+                    if (currentShift && passengerInfo.shifts) {
+                        const sortedShifts = [...passengerInfo.shifts].filter(s => s.order).sort((a, b) => a.order - b.order);
+                        if (sortedShifts.length > 1) {
+                            const currentIndex = sortedShifts.findIndex(s => s.key === currentShift.key);
+                            if (currentIndex !== -1) {
+                                const nextIndex = (currentIndex + 1) % sortedShifts.length;
+                                const nextShift = sortedShifts[nextIndex];
+                                nextShiftText = `<span style="color:${utils.getShiftColor(nextShift.key)};">${nextShift.name}</span> (${remainingDays} gün sonra)`;
+                            }
+                        } else if (sortedShifts.length === 1) {
+                            nextShiftText = 'Rotasyon yok';
+                        }
+                    }
+
+                    const holidayDaysText = (passengerInfo.holidayDays || []).map(dayKey => dayNames[dayKey]).join(', ');
+
+                    let popupContent = `
+                        <div class="text-gray-200">
+                            <h3 class="text-lg font-bold text-white mb-2">${passengerInfo.name}</h3>
+                            <p class="mb-1"><strong class="font-semibold text-gray-400">Vardiya:</strong> <span style="color:${utils.getShiftColor(currentShift?.key)};">${currentShift?.name || 'Bilinmiyor'} ${cycleText}</span></p>
+                            
+                            <p class="text-sm"><strong class="font-semibold text-gray-400">Saat:</strong> ${shiftTimeInfo}</p>
+                            <p class="text-sm mb-2"><strong class="font-semibold text-gray-400">İzin:</strong> ${holidayDaysText || 'Yok'}</p>
+
+                            <p class="mt-2 pt-2 border-t border-gray-600 text-sm"><strong class="font-semibold text-gray-400">Sonraki:</strong> ${nextShiftText}</p>
+                            `;
+                    
+                    if (state.currentUser.role === 'driver') {
+                        popupContent += `
+                            <div class="flex gap-2 mt-3">
+                                <button onclick="app.vue.ui.openPassengerModal(app.vue.state.allPassengers.find(p => p.id === '${passengerInfo.id}'))" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-1 px-3 rounded-md w-full">Düzenle</button>
+                                <button onclick="app.vue.handlers.deletePassenger('${passengerInfo.id}')" class="text-sm bg-red-600 hover:bg-red-700 text-white font-semibold py-1 px-3 rounded-md w-full">Sil</button>
+                            </div>`;
+                    }
+                    popupContent += `</div>`;
+                    marker.bindPopup(popupContent);
+                    return marker;
+                },
+            };
+
+            return { state, forms, filters, shiftFilterOptions, dayOptions, handlers, services, ui, utils };
+        },
+    };
+
+    window.app = { vue: createApp(App).mount('#app') };
+
+    </script>
 </body>
 </html>
